@@ -71,7 +71,7 @@ The backend checks these paths in order:
 ### 1) Backend
 
 ```bash
-cd /Users/a.healy/Projects/connection-assistant-v1
+cd /path/to/f5-ai-sec-connections-assistant
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
@@ -81,7 +81,7 @@ uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
 ### 2) Frontend (dev server)
 
 ```bash
-cd /Users/a.healy/Projects/connection-assistant-v1/frontend
+cd /path/to/f5-ai-sec-connections-assistant/frontend
 npm install
 npm run dev
 ```
@@ -91,7 +91,7 @@ Frontend runs on `http://127.0.0.1:5173` and proxies API requests to `http://127
 ## Docker Run
 
 ```bash
-cd /Users/a.healy/Projects/connection-assistant-v1
+cd /path/to/f5-ai-sec-connections-assistant
 docker build -t connection-assistant-v1 .
 docker run --rm -p 10000:10000 connection-assistant-v1
 ```
