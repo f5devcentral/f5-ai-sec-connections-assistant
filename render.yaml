@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: connection-assistant-v1
+    env: docker
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
