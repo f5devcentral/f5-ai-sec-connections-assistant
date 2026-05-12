@@ -138,10 +138,35 @@ def _authorization_value(token: str) -> str:
 def _parse_json(data: str | None) -> tuple[Any | None, bool]:
     if not data:
         return None, False
-    try:
-        return json.loads(data), True
-    except json.JSONDecodeError:
+    candidate = data.strip()
+    if not candidate:
         return None, False
+
+    def _parse_nested_json(value: str) -> tuple[Any | None, bool]:
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None, False
+
+        # Some pasted bodies come through as JSON strings that themselves contain a JSON object.
+        if isinstance(parsed, str):
+            nested = parsed.strip()
+            if nested.startswith("{") or nested.startswith("["):
+                try:
+                    return json.loads(nested), True
+                except json.JSONDecodeError:
+                    return parsed, True
+        return parsed, True
+
+    parsed, ok = _parse_nested_json(candidate)
+    if ok:
+        return parsed, True
+
+    # Tolerate shell-style wrapping: '{"prompt":"Hello"}'
+    if len(candidate) >= 2 and candidate[0] == "'" and candidate[-1] == "'":
+        return _parse_nested_json(candidate[1:-1].strip())
+
+    return None, False
 
 
 def _looks_like_default_request_body(body: str | None) -> bool:
@@ -157,7 +182,34 @@ def _parse_header(header: str) -> tuple[str, str] | None:
     if ":" not in header:
         return None
     k, v = header.split(":", 1)
-    return k.strip(), v.strip()
+    key = k.strip().rstrip(":").strip()
+    if not key:
+        return None
+    return key, v.strip()
+
+
+def _sanitize_headers(headers: dict[str, Any] | None) -> dict[str, str]:
+    if not headers:
+        return {}
+
+    out: dict[str, str] = {}
+    canonical: dict[str, str] = {}
+    for raw_key, raw_value in headers.items():
+        if not isinstance(raw_key, str):
+            continue
+        key = raw_key.strip().rstrip(":").strip()
+        if not key:
+            continue
+
+        value = "" if raw_value is None else str(raw_value).strip()
+        lower = key.lower()
+        previous_key = canonical.get(lower)
+        if previous_key and previous_key != key:
+            out.pop(previous_key, None)
+        canonical[lower] = key
+        out[key] = value
+
+    return out
 
 
 def _parse_raw_curl(raw_curl: str | None) -> ParsedCurl:
@@ -382,10 +434,11 @@ def _normalize_input(payload: EndpointInput) -> AnalyzeContext:
     endpoint_url = payload.endpoint_url or parsed_curl.url
     http_method = (payload.http_method or parsed_curl.method or "POST").upper()
 
-    merged_headers = {}
+    merged_headers: dict[str, str] = {}
     if parsed_curl.headers:
         merged_headers.update(parsed_curl.headers)
     merged_headers.update(payload.headers or {})
+    merged_headers = _sanitize_headers(merged_headers)
 
     request_body = payload.request_body
     if parsed_curl.data and payload.raw_curl:
